@@ -10,6 +10,7 @@ from ...data.dataset import DatasetH
 from ...data.dataset.handler import DataHandlerLP
 from ...model.interpret.base import FeatureInt
 from ...log import get_module_logger
+from .pytorch_mlp import PyTorchMLPModel
 
 
 class DEnsembleModel(Model, FeatureInt):
@@ -57,7 +58,7 @@ class DEnsembleModel(Model, FeatureInt):
         self.logger.info("Double Ensemble Model...")
         self.ensemble = []  # the current ensemble model, a list contains all the sub-models
         self.sub_features = []  # the features for each sub model in the form of pandas.Index
-        self.params = {"objective": loss}
+        self.params = {"objective": loss} if self.base_model == "gbm" else {}
         self.params.update(kwargs)
         self.loss = loss
         self.early_stopping_rounds = early_stopping_rounds
@@ -103,25 +104,42 @@ class DEnsembleModel(Model, FeatureInt):
                 features = self.feature_selection(df_train, loss_values)
 
     def train_submodel(self, df_train, df_valid, weights, features):
-        dtrain, dvalid = self._prepare_data_gbm(df_train, df_valid, weights, features)
-        evals_result = dict()
+        if self.base_model == "gbm":
+            dtrain, dvalid = self._prepare_data_gbm(df_train, df_valid, weights, features)
+            evals_result = dict()
 
-        callbacks = [lgb.log_evaluation(20), lgb.record_evaluation(evals_result)]
-        if self.early_stopping_rounds:
-            callbacks.append(lgb.early_stopping(self.early_stopping_rounds))
-            self.logger.info("Training with early_stopping...")
+            callbacks = [lgb.log_evaluation(20), lgb.record_evaluation(evals_result)]
+            if self.early_stopping_rounds:
+                callbacks.append(lgb.early_stopping(self.early_stopping_rounds))
+                self.logger.info("Training with early_stopping...")
 
-        model = lgb.train(
-            self.params,
-            dtrain,
-            num_boost_round=self.epochs,
-            valid_sets=[dtrain, dvalid],
-            valid_names=["train", "valid"],
-            callbacks=callbacks,
-        )
-        evals_result["train"] = list(evals_result["train"].values())[0]
-        evals_result["valid"] = list(evals_result["valid"].values())[0]
-        return model
+            model = lgb.train(
+                self.params,
+                dtrain,
+                num_boost_round=self.epochs,
+                valid_sets=[dtrain, dvalid],
+                valid_names=["train", "valid"],
+                callbacks=callbacks,
+            )
+            evals_result["train"] = list(evals_result["train"].values())[0]
+            evals_result["valid"] = list(evals_result["valid"].values())[0]
+
+            return model
+        elif self.base_model == 'mlp':
+            x_train, y_train = df_train["feature"].loc[:, features], df_train["label"]
+            x_valid, y_valid = df_valid["feature"].loc[:, features], df_valid["label"]
+
+            # Initialize PyTorch MLP Model
+            pt_model_kwargs = dict(input_dim=x_train.shape[1], layers=(256, 128, 64))
+            model = PyTorchMLPModel(epochs=self.epochs, early_stop_rounds=self.early_stopping_rounds, pt_model_kwargs=pt_model_kwargs, **self.params)
+
+            evals_result = dict()
+            # Train the model
+            model.fit(x_train.values, y_train.values, weights.values, x_valid.values, y_valid.values, evals_result=evals_result)
+
+            return model
+        else:
+            raise ValueError("not implemented yet")
 
     def _prepare_data_gbm(self, df_train, df_valid, weights, features):
         x_train, y_train = df_train["feature"].loc[:, features], df_train["label"]
@@ -240,8 +258,11 @@ class DEnsembleModel(Model, FeatureInt):
             for i_tree in range(num_trees):
                 pred_tree += model.predict(x_train.values, start_iteration=i_tree, num_iteration=1)
                 loss_curve.iloc[:, i_tree] = self.get_loss(y_train, pred_tree)
+        elif self.base_model == "mlp":
+            loss_curve = pd.DataFrame(model.loss_curve)
         else:
             raise ValueError("not implemented yet")
+
         return loss_curve
 
     def predict(self, dataset: DatasetH, segment: Union[Text, slice] = "test"):
