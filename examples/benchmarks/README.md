@@ -44,7 +44,7 @@ The numbers shown below demonstrate the performance of the entire `workflow` of 
 | MLP                                      | Alpha158                            | 0.0376±0.00 | 0.2846±0.02 | 0.0429±0.00 | 0.3220±0.01 | 0.0895±0.02       | 1.1408±0.23       | -0.1103±0.02 |
 | LightGBM(Guolin Ke, et al.)              | Alpha158                            | 0.0448±0.00 | 0.3660±0.00 | 0.0469±0.00 | 0.3877±0.00 | 0.0901±0.00       | 1.0164±0.00       | -0.1038±0.00 |
 | DoubleEnsemble(Chuheng Zhang, et al.)    | Alpha158                            | 0.0521±0.00 | 0.4223±0.01 | 0.0502±0.00 | 0.4117±0.01 | 0.1158±0.01       | 1.3432±0.11       | -0.0920±0.01 |
-
+| DoubleEnsemble(MLP, Richard Impl.)       | Alpha158                            | 0.0287      | 0.2129      | 0.0256      | 0.1865      | 0.0006            | 0.0064            | -0.2039      |
 ### Alpha360 dataset
 
 | Model Name                                | Dataset  | IC          | ICIR        | Rank IC     | Rank ICIR   | Annualized Return | Information Ratio | Max Drawdown |
